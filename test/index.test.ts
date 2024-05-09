@@ -58,7 +58,6 @@ test('preload', async () => {
       jsonrpc: '2.0',
       id: 1, result: null
     })
-
   })
   await import('../src/index.js')
   const listener = jest.fn()
