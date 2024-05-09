@@ -7,6 +7,7 @@ const handleElectronMessage = (event, message) => {
 }
 
 const handleWindowMessage = (event) => {
+  console.log('handle window message')
   const { data, ports } = event
   ipcRenderer.once(channelName, handleElectronMessage)
   ipcRenderer.postMessage(channelName, data, ports)
