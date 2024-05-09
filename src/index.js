@@ -3,12 +3,10 @@ const { ipcRenderer, contextBridge } = require('electron')
 const channelName = 'port'
 
 const handleElectronMessage = (event, message) => {
-  console.log('handle eelctron message')
   window.postMessage(message, location.origin)
 }
 
 const handleWindowMessage = (event) => {
-  console.log('handle window message')
   const { data, ports } = event
   ipcRenderer.once(channelName, handleElectronMessage)
   ipcRenderer.postMessage(channelName, data, ports)
