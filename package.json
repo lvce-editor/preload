@@ -8,13 +8,16 @@
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "type-check": "tsc"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "lvce-editor",
+    "electron",
+    "preload"
+  ],
+  "author": "Lvce Editor",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lvce-editor/lvce-editor.git",
-    "directory": "packages/preload"
+    "url": "git+https://github.com/lvce-editor/preload.git"
   },
   "engines": {
     "node": ">=18"
@@ -33,7 +36,6 @@
       ".ts"
     ],
     "moduleNameMapper": {
-      "@vscode/windows-process-tree": "<rootDir>/mocks/windows-process-tree.js",
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transform": {
