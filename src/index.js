@@ -1,4 +1,4 @@
-const { ipcRenderer, contextBridge } = require('electron')
+const { ipcRenderer, contextBridge, webUtils } = require('electron')
 
 const channelName = 'port'
 
@@ -12,9 +12,16 @@ const handleWindowMessage = (event) => {
   ipcRenderer.postMessage(channelName, data, ports)
 }
 
+const electronGlobals = {
+  getPathForFile(file) {
+    return webUtils.getPathForFile(file)
+  },
+}
+
 const main = () => {
   window.addEventListener('message', handleWindowMessage, { once: true })
   contextBridge.exposeInMainWorld('isElectron', true)
+  contextBridge.exposeInMainWorld('electronGlobals', electronGlobals)
 }
 
 main()
