@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/*.js", "src/index.js", "test/**/*.test.ts"],
+  "project": ["**/*.js", "**/*.ts"],
+  "ignoreDependencies": ["electron"]
+}
