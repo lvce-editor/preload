@@ -20,17 +20,20 @@ class MockIpcRenderer {
   }
 }
 
-
-jest.mock('electron', () => {
-  return {
-    ipcRenderer: new MockIpcRenderer(),
-    contextBridge: {
-      exposeInMainWorld: jest.fn()
+jest.mock(
+  'electron',
+  () => {
+    return {
+      ipcRenderer: new MockIpcRenderer(),
+      contextBridge: {
+        exposeInMainWorld: jest.fn(),
+      },
     }
-  }
-}, {
-  virtual: true
-})
+  },
+  {
+    virtual: true,
+  },
+)
 
 class MockWindow extends EventTarget {
   port1: MessagePort
@@ -47,10 +50,13 @@ class MockWindow extends EventTarget {
     this.port1.postMessage(message)
   }
 
-  addEventListener(type: string, callback: any, options?: boolean | AddEventListenerOptions | undefined): void {
+  addEventListener(
+    type: string,
+    callback: any,
+    options?: boolean | AddEventListenerOptions | undefined,
+  ): void {
     this.port2.addEventListener('message', callback, options)
   }
-
 }
 
 beforeAll(() => {
@@ -59,7 +65,7 @@ beforeAll(() => {
   globalThis.window = new MockWindow()
   // @ts-ignore
   globalThis.location = {
-    origin: ''
+    origin: '',
   }
 })
 
@@ -67,43 +73,46 @@ const withResolvers = <T>() => {
   let _resolve
   let _reject
   const promise = new Promise<T>((resolve, reject) => {
-    _resolve
-      = resolve
+    _resolve = resolve
     _reject = reject
   })
   return {
-    resolve: _resolve, reject: _reject, promise
+    resolve: _resolve,
+    reject: _reject,
+    promise,
   }
 }
 
 test('preload', async () => {
-  const { ipcRenderer, } = require('electron')
+  const { ipcRenderer } = require('electron')
   let rendererListener: any
   const { resolve: resolve1, promise: promise1 } = withResolvers<MessageEvent>()
   jest.spyOn(ipcRenderer, 'once').mockImplementation((name, listener) => {
     rendererListener = listener
-
   })
   jest.spyOn(ipcRenderer, 'postMessage').mockImplementation(() => {
     window.addEventListener('message', resolve1, { once: true })
     rendererListener(null, {
       jsonrpc: '2.0',
       id: 1,
-      result: null
+      result: null,
     })
   })
   await import('../src/index.js')
-  window.postMessage({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'initialize',
-    params: []
-  }, location.origin)
+  window.postMessage(
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: [],
+    },
+    location.origin,
+  )
 
   const result = await promise1
   expect(result.data).toEqual({
     jsonrpc: '2.0',
     id: 1,
-    result: null
+    result: null,
   })
 })
