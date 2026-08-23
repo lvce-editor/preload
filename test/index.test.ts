@@ -2,117 +2,123 @@ import { beforeAll, expect, jest, test } from '@jest/globals'
 import { createRequire } from 'node:module'
 
 class MockIpcRenderer {
-  port1: MessagePort
-  port2: MessagePort
+  listener: ((event: unknown, message: any) => void) | undefined
+  on = jest.fn(
+    (
+      _channelName: string,
+      listener: (event: unknown, message: any) => void,
+    ) => {
+      this.listener = listener
+    },
+  )
+  postMessage = jest.fn()
 
-  constructor() {
-    const { port1, port2 } = new MessageChannel()
-    this.port1 = port1
-    this.port2 = port2
-  }
-
-  postMessage(message, transfer) {
-    this.port1.postMessage(message, transfer)
-  }
-
-  once(channelName, listener) {
-    this.port2.addEventListener('message', listener, { once: true })
+  emitFromMain(message: any) {
+    this.listener?.(undefined, message)
   }
 }
 
+const ipcRenderer = new MockIpcRenderer()
+const exposeInMainWorld = jest.fn()
+
 jest.mock(
   'electron',
-  () => {
-    return {
-      ipcRenderer: new MockIpcRenderer(),
-      contextBridge: {
-        exposeInMainWorld: jest.fn(),
-      },
-    }
-  },
+  () => ({
+    ipcRenderer,
+    contextBridge: {
+      exposeInMainWorld,
+    },
+    webUtils: {
+      getPathForFile: jest.fn(),
+    },
+  }),
   {
     virtual: true,
   },
 )
 
 class MockWindow extends EventTarget {
-  port1: MessagePort
-  port2: MessagePort
-
-  constructor() {
-    super()
-    const { port1, port2 } = new MessageChannel()
-    this.port1 = port1
-    this.port2 = port2
-  }
-
-  postMessage(message, origin) {
-    this.port1.postMessage(message)
-  }
-
-  addEventListener(
-    type: string,
-    callback: any,
-    options?: boolean | AddEventListenerOptions | undefined,
-  ): void {
-    this.port2.addEventListener('message', callback, options)
+  postMessage(
+    message: any,
+    _origin?: string,
+    ports: readonly MessagePort[] = [],
+  ) {
+    this.dispatchEvent(
+      new MessageEvent('message', {
+        data: message,
+        ports,
+      }),
+    )
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   globalThis.require = createRequire(import.meta.url)
   // @ts-ignore
   globalThis.window = new MockWindow()
   // @ts-ignore
   globalThis.location = {
-    origin: '',
+    origin: 'test://test',
   }
+  await import('../src/index.js')
 })
 
-const withResolvers = <T>() => {
-  let _resolve
-  let _reject
-  const promise = new Promise<T>((resolve, reject) => {
-    _resolve = resolve
-    _reject = reject
-  })
-  return {
-    resolve: _resolve,
-    reject: _reject,
-    promise,
-  }
-}
-
-test('preload', async () => {
-  const { ipcRenderer } = require('electron')
-  let rendererListener: any
-  const { resolve: resolve1, promise: promise1 } = withResolvers<MessageEvent>()
-  jest.spyOn(ipcRenderer, 'once').mockImplementation((name, listener) => {
-    rendererListener = listener
-  })
-  jest.spyOn(ipcRenderer, 'postMessage').mockImplementation(() => {
-    window.addEventListener('message', resolve1, { once: true })
-    rendererListener(null, {
-      jsonrpc: '2.0',
-      id: 1,
-      result: null,
-    })
-  })
-  await import('../src/index.js')
-  window.postMessage(
-    {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: [],
-    },
-    location.origin,
-  )
-
-  const result = await promise1
-  expect(result.data).toEqual({
-    jsonrpc: '2.0',
+test('forwards repeated renderer messages to the main process', () => {
+  const first = {
     id: 1,
-    result: null,
+    jsonrpc: '2.0',
+    method: 'initialize',
+    params: [],
+  }
+  const second = {
+    id: 2,
+    jsonrpc: '2.0',
+    method: 'second',
+    params: [],
+  }
+
+  window.postMessage(first, location.origin)
+  window.postMessage(second, location.origin)
+
+  expect(ipcRenderer.postMessage).toHaveBeenNthCalledWith(1, 'port', first, [])
+  expect(ipcRenderer.postMessage).toHaveBeenNthCalledWith(2, 'port', second, [])
+})
+
+test('forwards a main-process request and its renderer response without echoing the request', () => {
+  ipcRenderer.postMessage.mockClear()
+  const messages: any[] = []
+  window.addEventListener('message', (event) => {
+    messages.push((event as MessageEvent).data)
   })
+  const request = {
+    id: 3,
+    jsonrpc: '2.0',
+    method: 'Window.prepareClose',
+    params: [],
+  }
+
+  ipcRenderer.emitFromMain(request)
+
+  expect(messages).toEqual([{ ...request, __lvceElectronMainMessage: true }])
+  expect(ipcRenderer.postMessage).not.toHaveBeenCalled()
+
+  const response = {
+    id: 3,
+    jsonrpc: '2.0',
+    result: null,
+  }
+  window.postMessage(response, location.origin)
+
+  expect(ipcRenderer.postMessage).toHaveBeenCalledWith('port', response, [])
+})
+
+test('exposes Electron globals once', () => {
+  expect(ipcRenderer.on).toHaveBeenCalledWith('port', expect.any(Function))
+  expect(exposeInMainWorld).toHaveBeenCalledWith('isElectron', true)
+  expect(exposeInMainWorld).toHaveBeenCalledWith(
+    'electronGlobals',
+    expect.objectContaining({
+      getPathForFile: expect.any(Function),
+    }),
+  )
 })
